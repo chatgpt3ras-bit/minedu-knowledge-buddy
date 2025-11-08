@@ -257,7 +257,5 @@ Instrucciones:
   }
 
   const data = await response.json();
-  const answer = data.choices[0].message.content;
-  
-  return `ℹ️ Información de conocimiento general (no de documentos institucionales):\n\n${answer}`;
+  return data.choices[0].message.content;
 }
