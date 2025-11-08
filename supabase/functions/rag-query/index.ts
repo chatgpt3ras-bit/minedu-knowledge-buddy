@@ -8,6 +8,10 @@ const corsHeaders = {
 interface RagQueryRequest {
   question: string;
   topK?: number;
+  documentType?: string;
+  proceso?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 Deno.serve(async (req) => {
@@ -22,7 +26,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const { question, topK = 5 } = await req.json() as RagQueryRequest;
+    const { question, topK = 5, documentType, proceso, dateFrom, dateTo } = await req.json() as RagQueryRequest;
     
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
@@ -41,16 +45,24 @@ Deno.serve(async (req) => {
     // 1. Generate embedding for the question
     const questionEmbedding = await generateEmbedding(question, openaiApiKey);
     
-    // 2. Search for similar chunks using vector similarity
+    // 2. Build RPC parameters with filters
+    const rpcParams: any = {
+      query_embedding: questionEmbedding,
+      match_threshold: 0.5,
+      match_count: topK,
+      _user_id: user.id,
+      user_id: user.id,
+    };
+
+    if (documentType) rpcParams.filter_tipo = documentType;
+    if (proceso) rpcParams.filter_proceso = proceso;
+    if (dateFrom) rpcParams.filter_date_from = dateFrom;
+    if (dateTo) rpcParams.filter_date_to = dateTo;
+
+    // 3. Search for similar chunks using vector similarity
     const { data: similarChunks, error: searchError } = await supabase.rpc(
       'match_chunks',
-      {
-        query_embedding: questionEmbedding,
-        match_threshold: 0.5,
-        match_count: topK,
-        _user_id: user.id,
-        user_id: user.id,
-      }
+      rpcParams
     );
 
     if (searchError) {
@@ -58,30 +70,33 @@ Deno.serve(async (req) => {
       throw new Error(`Vector search failed: ${searchError.message}`);
     }
 
+    let useWebSearch = false;
     if (!similarChunks || similarChunks.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          answer: 'No encontré información relevante en los documentos para responder tu pregunta.',
-          sources: [],
-          chunks: 0,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.log('No relevant chunks found, using web search as fallback');
+      useWebSearch = true;
     }
 
-    console.log(`Found ${similarChunks.length} relevant chunks`);
+    let context = '';
+    let answer = '';
 
-    // 3. Build context from retrieved chunks
-    const context = similarChunks
-      .map((chunk: any) => `[Documento: ${chunk.document_title}]\n${chunk.content}`)
-      .join('\n\n---\n\n');
+    if (useWebSearch) {
+      // Use web search mode
+      answer = await generateAnswerWithWebSearch(question, openaiApiKey);
+    } else {
+      console.log(`Found ${similarChunks.length} relevant chunks`);
 
-    // 4. Generate answer using OpenAI
-    const answer = await generateAnswer(question, context, openaiApiKey);
+      // 4. Build context from retrieved chunks
+      context = similarChunks
+        .map((chunk: any) => `[Documento: ${chunk.document_title}]\n${chunk.content}`)
+        .join('\n\n---\n\n');
+
+      // 5. Generate answer using OpenAI with document context
+      answer = await generateAnswer(question, context, openaiApiKey);
+    }
     
     const latency = Date.now() - startTime;
 
-    // 5. Save query to database
+    // 6. Save query to database
     const { data: queryRecord, error: queryError } = await supabase
       .from('queries')
       .insert({
@@ -89,7 +104,7 @@ Deno.serve(async (req) => {
         pregunta: question,
         respuesta: answer,
         latency_ms: latency,
-        top_k: topK,
+        top_k: useWebSearch ? 0 : topK,
       })
       .select()
       .single();
@@ -98,8 +113,8 @@ Deno.serve(async (req) => {
       console.error('Error saving query:', queryError);
     }
 
-    // 6. Save query sources
-    if (queryRecord) {
+    // 7. Save query sources
+    if (queryRecord && !useWebSearch) {
       const sources = similarChunks.map((chunk: any, index: number) => ({
         query_id: queryRecord.id,
         document_id: chunk.document_id,
@@ -117,8 +132,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 7. Return response with sources
-    const sourcesInfo = similarChunks.map((chunk: any) => ({
+    // 8. Return response with sources
+    const sourcesInfo = useWebSearch ? [] : similarChunks.map((chunk: any) => ({
       documentId: chunk.document_id,
       documentTitle: chunk.document_title,
       documentType: chunk.document_type,
@@ -129,8 +144,10 @@ Deno.serve(async (req) => {
       JSON.stringify({
         answer,
         sources: sourcesInfo,
-        chunks: similarChunks.length,
+        chunks: useWebSearch ? 0 : similarChunks.length,
         latencyMs: latency,
+        queryId: queryRecord?.id,
+        usedWebSearch: useWebSearch,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -203,4 +220,44 @@ Instrucciones:
 
   const data = await response.json();
   return data.choices[0].message.content;
+}
+
+async function generateAnswerWithWebSearch(question: string, apiKey: string): Promise<string> {
+  const systemPrompt = `Eres un asistente experto que puede buscar información en internet cuando no hay documentos institucionales disponibles.
+
+Instrucciones:
+- Responde de forma clara, precisa y concisa
+- Usa información actualizada y verificable de internet
+- Indica que la información proviene de fuentes externas (no de documentos institucionales)
+- Mantén un tono profesional y objetivo`;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: `Pregunta: ${question}\n\nNOTA: No hay documentos institucionales disponibles para esta consulta. Proporciona información general basada en tu conocimiento.` 
+        },
+      ],
+      temperature: 0.5,
+      max_tokens: 1000,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI Chat API error: ${error}`);
+  }
+
+  const data = await response.json();
+  const answer = data.choices[0].message.content;
+  
+  return `ℹ️ Información de conocimiento general (no de documentos institucionales):\n\n${answer}`;
 }

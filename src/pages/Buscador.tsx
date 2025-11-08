@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Send, Loader2, FileText, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Send, Loader2, FileText, Clock, ThumbsUp, ThumbsDown, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -19,6 +20,8 @@ interface Message {
     similarity: number;
   }>;
   timestamp: Date;
+  queryId?: string;
+  feedback?: number;
 }
 
 export default function Buscador() {
@@ -26,6 +29,34 @@ export default function Buscador() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [documentTypes, setDocumentTypes] = useState<string[]>([]);
+  const [processes, setProcesses] = useState<string[]>([]);
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedProcess, setSelectedProcess] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  // Load filter options
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      const { data: taxonomias } = await supabase
+        .from('taxonomias')
+        .select('nombre, valores');
+      
+      if (taxonomias) {
+        const tipoTax = taxonomias.find(t => t.nombre === 'tipo_documento');
+        const procesoTax = taxonomias.find(t => t.nombre === 'proceso');
+        
+        if (tipoTax) setDocumentTypes(tipoTax.valores);
+        if (procesoTax) setProcesses(procesoTax.valores);
+      }
+    };
+    
+    if (user) loadFilterOptions();
+  }, [user]);
 
   const handleSubmit = async (question: string) => {
     if (!question.trim() || !user) return;
@@ -41,8 +72,15 @@ export default function Buscador() {
     setLoading(true);
 
     try {
+      const filters: any = { question, topK: 5 };
+      
+      if (selectedType !== 'all') filters.documentType = selectedType;
+      if (selectedProcess !== 'all') filters.proceso = selectedProcess;
+      if (dateFrom) filters.dateFrom = dateFrom;
+      if (dateTo) filters.dateTo = dateTo;
+
       const { data, error } = await supabase.functions.invoke('rag-query', {
-        body: { question, topK: 5 },
+        body: filters,
       });
 
       if (error) throw error;
@@ -52,6 +90,7 @@ export default function Buscador() {
         content: data.answer,
         sources: data.sources,
         timestamp: new Date(),
+        queryId: data.queryId,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -69,6 +108,32 @@ export default function Buscador() {
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedback = async (messageIndex: number, rating: number) => {
+    const message = messages[messageIndex];
+    if (!message.queryId || message.feedback === rating) return;
+
+    try {
+      const { error } = await supabase
+        .from('feedback')
+        .insert({
+          query_id: message.queryId,
+          rating,
+          comentario: null,
+        });
+
+      if (error) throw error;
+
+      setMessages(prev => prev.map((msg, idx) => 
+        idx === messageIndex ? { ...msg, feedback: rating } : msg
+      ));
+
+      toast.success(rating === 1 ? 'Gracias por tu valoración positiva' : 'Gracias por tu feedback, nos ayuda a mejorar');
+    } catch (error: any) {
+      console.error('Error saving feedback:', error);
+      toast.error('Error al guardar el feedback');
     }
   };
 
@@ -93,9 +158,79 @@ export default function Buscador() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Buscador RAG</h1>
           <p className="text-muted-foreground">
-            Realiza consultas inteligentes sobre el conocimiento institucional
+            Realiza consultas inteligentes sobre el conocimiento institucional y de internet
           </p>
         </div>
+
+        {/* Filters Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Filtros de Búsqueda</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                {showFilters ? 'Ocultar' : 'Mostrar'} Filtros
+              </Button>
+            </div>
+          </CardHeader>
+          {showFilters && (
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Tipo de Documento</label>
+                  <Select value={selectedType} onValueChange={setSelectedType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {documentTypes.map(type => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Proceso</label>
+                  <Select value={selectedProcess} onValueChange={setSelectedProcess}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {processes.map(proceso => (
+                        <SelectItem key={proceso} value={proceso}>{proceso}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Desde</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Hasta</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
 
         <Card>
           <CardHeader>
@@ -112,7 +247,7 @@ export default function Buscador() {
                     </h3>
                     <p className="text-sm text-muted-foreground max-w-md">
                       Haz preguntas sobre los documentos cargados y obtén respuestas 
-                      basadas en el conocimiento institucional con citas y referencias.
+                      basadas en el conocimiento institucional y de internet con citas y referencias.
                     </p>
                   </div>
                 ) : (
@@ -153,9 +288,34 @@ export default function Buscador() {
                             </div>
                           )}
 
-                          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {message.timestamp.toLocaleTimeString()}
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Clock className="h-3 w-3" />
+                              {message.timestamp.toLocaleTimeString()}
+                            </div>
+                            
+                            {message.role === 'assistant' && message.queryId && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleFeedback(index, 1)}
+                                  disabled={message.feedback !== undefined}
+                                >
+                                  <ThumbsUp className={`h-3 w-3 ${message.feedback === 1 ? 'fill-success text-success' : ''}`} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => handleFeedback(index, 0)}
+                                  disabled={message.feedback !== undefined}
+                                >
+                                  <ThumbsDown className={`h-3 w-3 ${message.feedback === 0 ? 'fill-destructive text-destructive' : ''}`} />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
