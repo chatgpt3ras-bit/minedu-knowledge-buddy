@@ -372,21 +372,43 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
-      match_chunks: {
-        Args: {
-          match_count?: number
-          match_threshold?: number
-          query_embedding: string
-        }
-        Returns: {
-          chunk_id: string
-          content: string
-          document_id: string
-          document_title: string
-          document_type: Database["public"]["Enums"]["tipo_documento"]
-          similarity: number
-        }[]
-      }
+      match_chunks:
+        | {
+            Args: {
+              _user_id?: string
+              filter_date_from?: string
+              filter_date_to?: string
+              filter_proceso?: string
+              filter_tipo?: string
+              match_count?: number
+              match_threshold?: number
+              query_embedding: string
+              user_id?: string
+            }
+            Returns: {
+              chunk_id: string
+              content: string
+              document_id: string
+              document_title: string
+              document_type: string
+              similarity: number
+            }[]
+          }
+        | {
+            Args: {
+              match_count?: number
+              match_threshold?: number
+              query_embedding: string
+            }
+            Returns: {
+              chunk_id: string
+              content: string
+              document_id: string
+              document_title: string
+              document_type: Database["public"]["Enums"]["tipo_documento"]
+              similarity: number
+            }[]
+          }
     }
     Enums: {
       app_role: "admin" | "analista"
