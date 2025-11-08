@@ -29,12 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           setTimeout(async () => {
             const { data } = await supabase
-              .from('users')
-              .select('rol')
-              .eq('id', session.user.id)
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
               .maybeSingle();
             
-            setUserRole(data?.rol ?? 'analista');
+            setUserRole(data?.role ?? 'analista');
           }, 0);
         } else {
           setUserRole(null);
@@ -50,12 +50,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (session?.user) {
         supabase
-          .from('users')
-          .select('rol')
-          .eq('id', session.user.id)
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
           .maybeSingle()
           .then(({ data }) => {
-            setUserRole(data?.rol ?? 'analista');
+            setUserRole(data?.role ?? 'analista');
             setIsLoading(false);
           });
       } else {
