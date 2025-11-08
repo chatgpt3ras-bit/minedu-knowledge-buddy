@@ -141,17 +141,45 @@ async function extractText(file: Blob, filename: string): Promise<string> {
 }
 
 function createChunks(text: string, chunkSize: number, overlap: number): string[] {
+  const tokens = text.split(/\s+/).filter(Boolean);
   const chunks: string[] = [];
-  const tokens = text.split(/\s+/);
-  
-  for (let i = 0; i < tokens.length; i += (chunkSize - overlap)) {
-    const chunk = tokens.slice(i, i + chunkSize).join(' ');
-    if (chunk.trim()) {
-      chunks.push(chunk);
+  const step = Math.max(chunkSize - overlap, 1);
+
+  if (tokens.length > 0) {
+    for (let i = 0; i < tokens.length; i += step) {
+      const chunk = tokens.slice(i, i + chunkSize).join(' ').trim();
+      if (chunk) {
+        if (estimateTokens(chunk) > 8000) {
+          chunks.push(...chunkByCharacters(chunk, chunkSize * 4, overlap * 4));
+        } else {
+          chunks.push(chunk);
+        }
+      }
+    }
+  } else if (text.trim()) {
+    // Fallback for texts without whitespace (e.g. base64 encoded files)
+    chunks.push(...chunkByCharacters(text, chunkSize * 4, overlap * 4));
+  }
+
+  return chunks;
+}
+
+function chunkByCharacters(text: string, chunkSize: number, overlap: number): string[] {
+  const result: string[] = [];
+  const effectiveChunkSize = Math.max(chunkSize, 1);
+  const step = Math.max(effectiveChunkSize - Math.max(overlap, 0), 1);
+
+  for (let start = 0; start < text.length; start += step) {
+    const slice = text.slice(start, Math.min(start + effectiveChunkSize, text.length)).trim();
+    if (slice) {
+      result.push(slice);
+    }
+    if (start + effectiveChunkSize >= text.length) {
+      break;
     }
   }
-  
-  return chunks;
+
+  return result;
 }
 
 function estimateTokens(text: string): number {
@@ -159,7 +187,17 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+function enforceTokenLimit(text: string, maxTokens = 8000): string {
+  const maxLength = maxTokens * 4; // Approximate chars per token
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return text.slice(0, maxLength);
+}
+
 async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
+  const safeText = enforceTokenLimit(text);
   const response = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: {
@@ -168,7 +206,7 @@ async function generateEmbedding(text: string, apiKey: string): Promise<number[]
     },
     body: JSON.stringify({
       model: 'text-embedding-3-small',
-      input: text,
+      input: safeText,
     }),
   });
 
