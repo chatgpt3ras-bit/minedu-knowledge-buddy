@@ -49,11 +49,11 @@ Deno.serve(async (req) => {
     const chunks = createChunks(text, 1200, 200);
     console.log(`Created ${chunks.length} chunks`);
 
-    // Insert chunks into database
+    // Insert chunks into database (sanitize content first)
     const chunksToInsert = chunks.map((content, index) => ({
       document_id: documentId,
       chunk_index: index,
-      content,
+      content: sanitizeText(content),
       token_count: estimateTokens(content),
     }));
 
@@ -104,17 +104,40 @@ Deno.serve(async (req) => {
   }
 });
 
+function sanitizeText(text: string): string {
+  // Remove null bytes and other problematic characters
+  let sanitized = text.replace(/\0/g, '');
+  
+  // Replace problematic Unicode escape sequences
+  sanitized = sanitized.replace(/\\u0000/g, '');
+  
+  // Replace non-printable control characters except newlines and tabs
+  sanitized = sanitized.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // Normalize smart quotes and special characters
+  sanitized = sanitized.replace(/[\u2018\u2019]/g, "'"); // Smart single quotes
+  sanitized = sanitized.replace(/[\u201C\u201D]/g, '"'); // Smart double quotes
+  sanitized = sanitized.replace(/\u2013/g, '-'); // En dash
+  sanitized = sanitized.replace(/\u2014/g, '--'); // Em dash
+  sanitized = sanitized.replace(/\u2026/g, '...'); // Ellipsis
+  
+  // Remove any remaining invalid characters for PostgreSQL
+  sanitized = sanitized.replace(/[\uFFFE\uFFFF]/g, '');
+  
+  return sanitized.trim();
+}
+
 async function extractText(file: Blob, filename: string): Promise<string> {
   const text = await file.text();
   
   // Simple text extraction - for PDF/DOCX you'd need specialized libraries
   // For now, treating all files as text
   if (filename.endsWith('.txt')) {
-    return text;
+    return sanitizeText(text);
   }
   
   // For other formats, return raw text (in production, use proper parsers)
-  return text;
+  return sanitizeText(text);
 }
 
 function createChunks(text: string, chunkSize: number, overlap: number): string[] {
