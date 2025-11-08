@@ -48,6 +48,8 @@ Deno.serve(async (req) => {
         query_embedding: questionEmbedding,
         match_threshold: 0.5,
         match_count: topK,
+        _user_id: user.id,
+        user_id: user.id,
       }
     );
 

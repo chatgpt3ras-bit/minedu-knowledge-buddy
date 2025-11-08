@@ -2,7 +2,8 @@
 CREATE OR REPLACE FUNCTION public.match_chunks(
   query_embedding vector(1536),
   match_threshold float DEFAULT 0.5,
-  match_count int DEFAULT 5
+  match_count int DEFAULT 5,
+  _user_id uuid
 )
 RETURNS TABLE (
   chunk_id uuid,
@@ -30,8 +31,8 @@ BEGIN
   JOIN documents d ON d.id = c.document_id
   WHERE 1 - (e.vector <=> query_embedding) > match_threshold
     AND (
-      d.created_by = auth.uid() 
-      OR public.is_admin(auth.uid())
+      d.created_by = _user_id
+      OR public.is_admin(_user_id)
     )
   ORDER BY e.vector <=> query_embedding
   LIMIT match_count;
