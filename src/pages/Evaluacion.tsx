@@ -7,6 +7,8 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { exportToCSV } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function Evaluacion() {
   const { data: latestKPIs, isLoading: loadingLatest } = useLatestKPIs();
@@ -63,6 +65,13 @@ export default function Evaluacion() {
 
   const hasData = kpisHistory && kpisHistory.length > 0;
 
+  const handleExportCSV = () => {
+    if (!kpisHistory || kpisHistory.length === 0) return;
+    
+    exportToCSV(kpisHistory, `kpis_${format(new Date(), 'yyyy-MM-dd')}`);
+    toast.success('KPIs exportados exitosamente');
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -73,7 +82,7 @@ export default function Evaluacion() {
               Monitorea el rendimiento del sistema
             </p>
           </div>
-          <Button variant="outline" disabled={!hasData}>
+          <Button variant="outline" disabled={!hasData} onClick={handleExportCSV}>
             <Download className="mr-2 h-4 w-4" />
             Exportar CSV
           </Button>
