@@ -21,6 +21,16 @@ interface DocumentMetadata {
   autor: string;
 }
 
+interface GeneratedAIMetadata {
+  tema_principal?: string;
+  subtema?: string;
+  proceso_asociado?: string;
+  palabras_clave?: string[];
+  tipo_documento?: string;
+  resumen_breve?: string;
+  nivel_confianza?: number;
+}
+
 export default function Documentos() {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
@@ -37,7 +47,7 @@ export default function Documentos() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [autoTagDialogOpen, setAutoTagDialogOpen] = useState(false);
   const [autoTagLoading, setAutoTagLoading] = useState(false);
-  const [generatedMetadata, setGeneratedMetadata] = useState<any>(null);
+  const [generatedMetadata, setGeneratedMetadata] = useState<GeneratedAIMetadata | null>(null);
   const [selectedDocForTag, setSelectedDocForTag] = useState<string | null>(null);
 
   const loadDocuments = async () => {
@@ -392,12 +402,12 @@ export default function Documentos() {
                           {autoTagLoading && selectedDocForTag === doc.id ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Generando...
+                              Analizando...
                             </>
                           ) : (
                             <>
                               <Sparkles className="mr-2 h-4 w-4" />
-                              {doc.auto_tagged ? 'Regenerar Tags' : 'Generar Tags IA'}
+                              {doc.auto_tagged ? 'Regenerar Metadatos' : 'Generar Metadatos'}
                             </>
                           )}
                         </Button>

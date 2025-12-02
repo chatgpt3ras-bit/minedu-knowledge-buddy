@@ -61,9 +61,11 @@ export type Database = {
           fecha_doc: string
           hash: string
           id: string
+          nivel_confianza: number | null
           palabras_clave: string[] | null
           proceso: Database["public"]["Enums"]["tipo_proceso"]
           proceso_asociado: string | null
+          resumen_breve: string | null
           ruta_storage: string
           subtema: string | null
           tema: string | null
@@ -81,9 +83,11 @@ export type Database = {
           fecha_doc: string
           hash: string
           id?: string
+          nivel_confianza?: number | null
           palabras_clave?: string[] | null
           proceso: Database["public"]["Enums"]["tipo_proceso"]
           proceso_asociado?: string | null
+          resumen_breve?: string | null
           ruta_storage: string
           subtema?: string | null
           tema?: string | null
@@ -101,9 +105,11 @@ export type Database = {
           fecha_doc?: string
           hash?: string
           id?: string
+          nivel_confianza?: number | null
           palabras_clave?: string[] | null
           proceso?: Database["public"]["Enums"]["tipo_proceso"]
           proceso_asociado?: string | null
+          resumen_breve?: string | null
           ruta_storage?: string
           subtema?: string | null
           tema?: string | null
