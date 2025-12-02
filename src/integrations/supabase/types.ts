@@ -171,6 +171,7 @@ export type Database = {
           docs_nuevos: number
           fecha: string
           precision_at_k_avg: number
+          precision_avg: number | null
           reuse_rate: number
         }
         Insert: {
@@ -180,6 +181,7 @@ export type Database = {
           docs_nuevos?: number
           fecha: string
           precision_at_k_avg?: number
+          precision_avg?: number | null
           reuse_rate?: number
         }
         Update: {
@@ -189,6 +191,7 @@ export type Database = {
           docs_nuevos?: number
           fecha?: string
           precision_at_k_avg?: number
+          precision_avg?: number | null
           reuse_rate?: number
         }
         Relationships: []
