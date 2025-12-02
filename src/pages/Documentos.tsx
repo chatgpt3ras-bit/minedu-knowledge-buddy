@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Upload, FileText, Loader2, Trash2, Sparkles } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/lib/auth';
 import { toast } from 'sonner';
 import crypto from 'crypto-js';
+import { AutoTaggingDialog } from '@/components/AutoTaggingDialog';
+import { DocumentMetadataCard } from '@/components/DocumentMetadataCard';
 
 interface DocumentMetadata {
   titulo: string;
@@ -33,6 +35,10 @@ export default function Documentos() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [autoTagDialogOpen, setAutoTagDialogOpen] = useState(false);
+  const [autoTagLoading, setAutoTagLoading] = useState(false);
+  const [generatedMetadata, setGeneratedMetadata] = useState<any>(null);
+  const [selectedDocForTag, setSelectedDocForTag] = useState<string | null>(null);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -171,6 +177,35 @@ export default function Documentos() {
       toast.error('Error: ' + error.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleAutoTag = async (docId: string) => {
+    setSelectedDocForTag(docId);
+    setAutoTagDialogOpen(true);
+    setAutoTagLoading(true);
+    setGeneratedMetadata(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('auto-tag-document', {
+        body: { documentId: docId }
+      });
+
+      if (error) throw error;
+
+      if (data.error) throw new Error(data.error);
+
+      setGeneratedMetadata(data.metadata);
+      toast.success('Metadatos generados exitosamente');
+      
+      // Reload documents to show updated metadata
+      await loadDocuments();
+    } catch (error: any) {
+      console.error('Auto-tag error:', error);
+      toast.error('Error generando metadatos: ' + error.message);
+      setAutoTagDialogOpen(false);
+    } finally {
+      setAutoTagLoading(false);
     }
   };
 
@@ -331,28 +366,56 @@ export default function Documentos() {
                 No hay documentos aún. Sube tu primer documento para comenzar.
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="border rounded-lg overflow-hidden hover:border-primary/50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium">{doc.titulo}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.tipo} • {doc.proceso} • {new Date(doc.fecha_doc).toLocaleDateString()}
-                        </p>
+                    <div className="flex items-center justify-between p-4 bg-card">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="font-medium">{doc.titulo}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {doc.tipo} • {doc.proceso} • {new Date(doc.fecha_doc).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAutoTag(doc.id)}
+                          disabled={autoTagLoading && selectedDocForTag === doc.id}
+                        >
+                          {autoTagLoading && selectedDocForTag === doc.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generando...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {doc.auto_tagged ? 'Regenerar Tags' : 'Generar Tags IA'}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(doc.id, doc.ruta_storage)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(doc.id, doc.ruta_storage)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    
+                    {doc.auto_tagged && (
+                      <div className="p-4 pt-0">
+                        <DocumentMetadataCard metadata={doc} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -360,6 +423,13 @@ export default function Documentos() {
           </CardContent>
         </Card>
       </div>
+
+      <AutoTaggingDialog
+        open={autoTagDialogOpen}
+        onOpenChange={setAutoTagDialogOpen}
+        loading={autoTagLoading}
+        metadata={generatedMetadata}
+      />
     </Layout>
   );
 }

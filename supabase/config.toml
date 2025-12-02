@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.rag-query]
 verify_jwt = true
+
+[functions.auto-tag-document]
+verify_jwt = true

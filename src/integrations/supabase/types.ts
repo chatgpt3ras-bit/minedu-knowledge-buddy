@@ -51,6 +51,9 @@ export type Database = {
       }
       documents: {
         Row: {
+          area_responsable: string | null
+          auto_tagged: boolean | null
+          auto_tagged_at: string | null
           autor: string | null
           created_at: string
           created_by: string
@@ -58,12 +61,19 @@ export type Database = {
           fecha_doc: string
           hash: string
           id: string
+          palabras_clave: string[] | null
           proceso: Database["public"]["Enums"]["tipo_proceso"]
+          proceso_asociado: string | null
           ruta_storage: string
+          subtema: string | null
+          tema: string | null
           tipo: Database["public"]["Enums"]["tipo_documento"]
           titulo: string
         }
         Insert: {
+          area_responsable?: string | null
+          auto_tagged?: boolean | null
+          auto_tagged_at?: string | null
           autor?: string | null
           created_at?: string
           created_by: string
@@ -71,12 +81,19 @@ export type Database = {
           fecha_doc: string
           hash: string
           id?: string
+          palabras_clave?: string[] | null
           proceso: Database["public"]["Enums"]["tipo_proceso"]
+          proceso_asociado?: string | null
           ruta_storage: string
+          subtema?: string | null
+          tema?: string | null
           tipo: Database["public"]["Enums"]["tipo_documento"]
           titulo: string
         }
         Update: {
+          area_responsable?: string | null
+          auto_tagged?: boolean | null
+          auto_tagged_at?: string | null
           autor?: string | null
           created_at?: string
           created_by?: string
@@ -84,8 +101,12 @@ export type Database = {
           fecha_doc?: string
           hash?: string
           id?: string
+          palabras_clave?: string[] | null
           proceso?: Database["public"]["Enums"]["tipo_proceso"]
+          proceso_asociado?: string | null
           ruta_storage?: string
+          subtema?: string | null
+          tema?: string | null
           tipo?: Database["public"]["Enums"]["tipo_documento"]
           titulo?: string
         }
